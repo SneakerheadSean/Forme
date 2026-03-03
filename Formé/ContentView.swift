@@ -6,13 +6,20 @@
 //
 
 import SwiftUI
-
 struct ContentView: View {
     var body: some View {
         TabView {
-            HomeView(userName: "Alex") // ← swap "Alex" for your profile var later
+            HomeScreen()
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
+                }
+            Text("Workouts")
+                .tabItem {
+                    Label("Train", systemImage: "figure.strengthtraining.traditional")
+                }
+            Text("Nutrition")
+                .tabItem {
+                    Label("Nutrition", systemImage: "fork.knife")
                 }
         }
     }
