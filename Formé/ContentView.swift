@@ -9,16 +9,21 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Forme Coming Soon")
-        }
-        .padding()
-    }
-}
+        TabView {
+            SummaryCard()
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
 
-#Preview {
-    ContentView()
+            Text("Workouts") // placeholder for now
+                .tabItem {
+                    Label("Workouts", systemImage: "figure.strengthtraining.traditional")
+                }
+
+            Text("Nutrition") // placeholder for now
+                .tabItem {
+                    Label("Nutrition", systemImage: "fork.knife")
+                }
+        }
+    }
 }
