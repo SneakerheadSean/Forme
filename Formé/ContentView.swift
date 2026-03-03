@@ -6,19 +6,17 @@
 //
 
 import SwiftUI
-
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Forme Coming Soon")
-        }
-        .padding()
-    }
-}
+        TabView {
+            HomeScreen()
+                .tabItem { Label("Home", systemImage: "house.fill") }
 
-#Preview {
-    ContentView()
+            WorkoutScreen()
+                .tabItem { Label("Train", systemImage: "figure.strengthtraining.traditional") }
+
+            Text("Nutrition")
+                .tabItem { Label("Nutrition", systemImage: "fork.knife") }
+        }
+    }
 }

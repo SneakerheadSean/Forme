@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct Forme_App: App {
+struct BurnLogApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
