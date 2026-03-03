@@ -10,17 +10,13 @@ struct ContentView: View {
     var body: some View {
         TabView {
             HomeScreen()
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-            Text("Workouts")
-                .tabItem {
-                    Label("Train", systemImage: "figure.strengthtraining.traditional")
-                }
+                .tabItem { Label("Home", systemImage: "house.fill") }
+
+            WorkoutScreen()
+                .tabItem { Label("Train", systemImage: "figure.strengthtraining.traditional") }
+
             Text("Nutrition")
-                .tabItem {
-                    Label("Nutrition", systemImage: "fork.knife")
-                }
+                .tabItem { Label("Nutrition", systemImage: "fork.knife") }
         }
     }
 }
