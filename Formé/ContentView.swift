@@ -10,19 +10,9 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         TabView {
-            SummaryCard()
+            HomeView(userName: "Alex") // ← swap "Alex" for your profile var later
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
-                }
-
-            Text("Workouts") // placeholder for now
-                .tabItem {
-                    Label("Workouts", systemImage: "figure.strengthtraining.traditional")
-                }
-
-            Text("Nutrition") // placeholder for now
-                .tabItem {
-                    Label("Nutrition", systemImage: "fork.knife")
                 }
         }
     }
