@@ -15,7 +15,7 @@ struct ContentView: View {
             WorkoutScreen()
                 .tabItem { Label("Train", systemImage: "figure.strengthtraining.traditional") }
 
-            Text("Nutrition")
+            NutritionScreen()
                 .tabItem { Label("Nutrition", systemImage: "fork.knife") }
         }
     }
