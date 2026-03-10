@@ -6,6 +6,17 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3D7CB8792F5F074000C27D04 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB8782F5F074000C27D04 /* Auth */; };
+		3D7CB87B2F5F074000C27D04 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB87A2F5F074000C27D04 /* Functions */; };
+		3D7CB87D2F5F074000C27D04 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB87C2F5F074000C27D04 /* PostgREST */; };
+		3D7CB87F2F5F074000C27D04 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB87E2F5F074000C27D04 /* Realtime */; };
+		3D7CB8812F5F074000C27D04 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB8802F5F074000C27D04 /* Storage */; };
+		3D7CB8832F5F074000C27D04 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 3D7CB8822F5F074000C27D04 /* Supabase */; };
+		3D83A96E2F5A37750097B8BA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 3D83A96D2F5A37750097B8BA /* GoogleSignIn */; };
+		3D83A9702F5A37750097B8BA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 3D83A96F2F5A37750097B8BA /* GoogleSignInSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		3D153B892F56A0E70042D9D9 /* Formé.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Formé.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +34,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3D83A96E2F5A37750097B8BA /* GoogleSignIn in Frameworks */,
+				3D83A9702F5A37750097B8BA /* GoogleSignInSwift in Frameworks */,
+				3D7CB8812F5F074000C27D04 /* Storage in Frameworks */,
+				3D7CB87B2F5F074000C27D04 /* Functions in Frameworks */,
+				3D7CB8832F5F074000C27D04 /* Supabase in Frameworks */,
+				3D7CB87F2F5F074000C27D04 /* Realtime in Frameworks */,
+				3D7CB8792F5F074000C27D04 /* Auth in Frameworks */,
+				3D7CB87D2F5F074000C27D04 /* PostgREST in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				3D153B8B2F56A0E70042D9D9 /* Formé */,
+				3D7CB8772F5F074000C27D04 /* Frameworks */,
 				3D153B8A2F56A0E70042D9D9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +63,13 @@
 				3D153B892F56A0E70042D9D9 /* Formé.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		3D7CB8772F5F074000C27D04 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +92,14 @@
 			);
 			name = "Formé";
 			packageProductDependencies = (
+				3D83A96D2F5A37750097B8BA /* GoogleSignIn */,
+				3D83A96F2F5A37750097B8BA /* GoogleSignInSwift */,
+				3D7CB8782F5F074000C27D04 /* Auth */,
+				3D7CB87A2F5F074000C27D04 /* Functions */,
+				3D7CB87C2F5F074000C27D04 /* PostgREST */,
+				3D7CB87E2F5F074000C27D04 /* Realtime */,
+				3D7CB8802F5F074000C27D04 /* Storage */,
+				3D7CB8822F5F074000C27D04 /* Supabase */,
 			);
 			productName = "Formé";
 			productReference = 3D153B892F56A0E70042D9D9 /* Formé.app */;
@@ -94,6 +129,10 @@
 			);
 			mainGroup = 3D153B802F56A0E70042D9D9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				3D83A96C2F5A37750097B8BA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3D153B8A2F56A0E70042D9D9 /* Products */;
 			projectDirPath = "";
@@ -256,6 +295,7 @@
 				DEVELOPMENT_TEAM = 47BN73T2TQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +328,7 @@
 				DEVELOPMENT_TEAM = 47BN73T2TQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +373,68 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+		3D83A96C2F5A37750097B8BA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3D7CB8782F5F074000C27D04 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		3D7CB87A2F5F074000C27D04 /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		3D7CB87C2F5F074000C27D04 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		3D7CB87E2F5F074000C27D04 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		3D7CB8802F5F074000C27D04 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		3D7CB8822F5F074000C27D04 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96B2F5A37520097B8BA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		3D83A96D2F5A37750097B8BA /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96C2F5A37750097B8BA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		3D83A96F2F5A37750097B8BA /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D83A96C2F5A37750097B8BA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3D153B812F56A0E70042D9D9 /* Project object */;
 }
