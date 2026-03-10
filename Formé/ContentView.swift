@@ -1,7 +1,10 @@
 //
 //  ContentView.swift
 //  Formé
-//
+//  Root view. Handles three states:
+//   1. Not authenticated → AuthView
+//   2. Authenticated but not onboarded → OnboardingContainerView
+//   3. Authenticated + onboarded → Your existing MainTabView
 //  Created by Sean Hughes on 3/2/26.
 //
 

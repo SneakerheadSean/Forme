@@ -127,6 +127,11 @@ private struct ActivePlanHeroCard: View {
     private var progressPct: CGFloat {
         CGFloat(plan.dayNumber - 1) / CGFloat(plan.totalDays)
     }
+    private var safeProgressPct: CGFloat {
+        guard plan.totalDays > 0 else { return 0 }
+        let raw = CGFloat(max(0, plan.dayNumber - 1)) / CGFloat(plan.totalDays)
+        return min(max(raw, 0), 1)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -164,6 +169,7 @@ private struct ActivePlanHeroCard: View {
                 }
 
                 GeometryReader { geo in
+                    // Using safeProgressPct to avoid NaN/invalid widths during layout
                     ZStack(alignment: .leading) {
                         Capsule()
                             .fill(Color(UIColor.systemGroupedBackground))
@@ -176,7 +182,7 @@ private struct ActivePlanHeroCard: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: progressWidth * geo.size.width, height: 5)
+                            .frame(width: max(0, min(geo.size.width, safeProgressPct * geo.size.width)), height: 5)
                             .animation(.spring(response: 1.0, dampingFraction: 0.7).delay(0.2), value: progressWidth)
                     }
                 }
@@ -203,7 +209,8 @@ private struct ActivePlanHeroCard: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 appeared = true
-                progressWidth = progressPct
+                print("ActivePlanHeroCard progress:", "day=\(plan.dayNumber)", "total=\(plan.totalDays)", "safe=\(safeProgressPct)")
+                progressWidth = safeProgressPct
             }
         }
     }
