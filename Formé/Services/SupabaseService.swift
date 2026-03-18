@@ -56,7 +56,6 @@ struct ProfileRow: Codable {
 final class ProfileService {
 
     static let shared = ProfileService()
-    private let db = SupabaseService.shared.client.database
 
     private init() {}
 
@@ -88,7 +87,7 @@ final class ProfileService {
             created_at:                 nil
         )
 
-        try await db
+        try await SupabaseService.shared.client
             .from("profiles")
             .upsert(row)
             .execute()
@@ -96,7 +95,7 @@ final class ProfileService {
 
     /// Fetch profile for the currently authenticated user
     func fetchProfile(userId: String) async throws -> UserProfile? {
-        let rows: [ProfileRow] = try await db
+        let rows: [ProfileRow] = try await SupabaseService.shared.client
             .from("profiles")
             .select()
             .eq("id", value: userId)
@@ -137,3 +136,4 @@ final class ProfileService {
         case missingUserId
     }
 }
+

@@ -5,640 +5,509 @@
 //  Created by Sean Hughes on 3/3/26.
 //
 
-import Foundation
 import SwiftUI
 
-// ============================================================
-// MARK: - Calorie Ring Card
-// ============================================================
+// Local hex initializer to match the rest of the app's usage
+fileprivate extension Color {
+    init(hex: String) {
+        let hexString = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hexString).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hexString.count {
+        case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default: (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(.sRGB,
+                  red: Double(r) / 255,
+                  green: Double(g) / 255,
+                  blue: Double(b) / 255,
+                  opacity: Double(a) / 255)
+    }
+}
 
-struct CalorieRingCard: View {
+// MARK: - Meal Models
+enum MealType: String, CaseIterable, Identifiable {
+    case breakfast = "Breakfast"
+    case lunch     = "Lunch"
+    case dinner    = "Dinner"
+    case snacks    = "Snacks"
+    var id: String { rawValue }
+}
 
-    var goal: Int    = 2200
-    var eaten: Int   = 1840
-    var protein: (current: Double, goal: Double) = (118, 150)
-    var carbs:   (current: Double, goal: Double) = (195, 220)
-    var fat:     (current: Double, goal: Double) = (61,  70)
+struct MealEntry: Identifiable {
+    let id = UUID()
+    var emoji: String
+    var name: String
+    var kcal: Int
+    var type: MealType
+}
 
-    var left: Int    { max(goal - eaten, 0) }
-    var over: Int    { max(eaten - goal, 0) }
-    var isOver: Bool { eaten > goal }
+struct NutritionScreen: View {
 
-    @State private var ringProgress: CGFloat = 0
-    @State private var showingMealSheet: Bool = false
-    @State private var mealText: String = ""
-    @State private var selectedCategory: MealCategory = MealCategory.suggested()
+    @State private var meals: [MealEntry] = [
+        MealEntry(emoji: "🥣", name: "Overnight Oats", kcal: 420, type: .breakfast),
+        MealEntry(emoji: "☕️", name: "Latte",           kcal: 120, type: .breakfast),
+        MealEntry(emoji: "🥗", name: "Chicken Salad",   kcal: 520, type: .lunch),
+        MealEntry(emoji: "🥪", name: "Turkey Sandwich", kcal: 430, type: .lunch),
+        MealEntry(emoji: "🍝", name: "Pasta Dinner",    kcal: 780, type: .dinner),
+        MealEntry(emoji: "🍫", name: "Dark Chocolate",  kcal: 180, type: .snacks)
+    ]
+    @State private var editingMeal: MealEntry? = nil
+    @State private var showEditor: Bool = false
+
+    private var mealsByType: [(MealType, [MealEntry])] {
+        MealType.allCases.map { type in
+            (type, meals.filter { $0.type == type })
+        }.filter { !$0.1.isEmpty }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+
+                    // Section label
+                    Text("TODAY'S ENERGY")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
+
+                    NutritionSummaryCard()
+                        .padding(.horizontal, 16)
+
+                    // Recent Meals section placeholder (kept minimal but themed)
+                    Text("RECENT MEALS")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 22)
+                        .padding(.bottom, 10)
+
+                    RecentMealsCard(groups: mealsByType) { meal in
+                        editingMeal = meal
+                        showEditor = true
+                    }
+                    .padding(.horizontal, 16)
+
+                    Spacer().frame(height: 28)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(hex: "#F7F5F2").ignoresSafeArea())
+            .navigationTitle("Nutrition")
+            .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $showEditor, onDismiss: { editingMeal = nil }) {
+                if var meal = editingMeal {
+                    MealInlineEditor(meal: meal) { updated in
+                        if let idx = meals.firstIndex(where: { $0.id == updated.id }) {
+                            meals[idx] = updated
+                        }
+                        showEditor = false
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .background(Color(hex: "#F7F5F2").ignoresSafeArea())
+                }
+            }
+        }
+    }
+}
+
+struct NutritionSummaryCard: View {
+    private let gold = Color(hex: "#C4A97D")
+    private let proteinColor = Color(hex: "#FF6B6B")
+    private let carbsColor   = Color(hex: "#FFB347")
+    private let fatColor     = Color(hex: "#4FC3F7")
 
     var body: some View {
         VStack(spacing: 0) {
-
-            // ── Ring + Stats ─────────────────────────────────
-            HStack(alignment: .center, spacing: 28) {
-
-                // Ring
-                ZStack {
-                    Circle()
-                        .stroke(Color(UIColor.systemGroupedBackground), lineWidth: 10)
-
-                    Circle()
-                        .trim(from: 0, to: ringProgress)
-                        .stroke(
-                            isOver ? Color(hex: "#FF3B30") : Color(hex: "#C4A97D"),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .shadow(
-                            color: (isOver ? Color(hex: "#FF3B30") : Color(hex: "#C4A97D")).opacity(0.3),
-                            radius: 4
-                        )
-
-                    VStack(spacing: 5) {
-                        Text("\(Int(min(Double(eaten) / Double(goal), 1.0) * 100))%")
-                            .font(.system(size: 20, weight: .heavy))
-                            .foregroundColor(Color(UIColor.label))
-                        Text("of goal")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(UIColor.secondaryLabel))
-                    }
+            // Header
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TODAY")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .tracking(0.9)
+                    Text("Energy & Macros")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
-                .frame(width: 104, height: 104)
-                .padding(.leading, 20)
-
-                // Stats — left aligned
-                VStack(alignment: .leading, spacing: 0) {
-                    statRow(label: "Goal",
-                            value: goal,
-                            color: Color(UIColor.tertiaryLabel))
-                    Rectangle()
-                        .fill(Color(UIColor.separator).opacity(0.3))
-                        .frame(height: 0.5)
-                        .padding(.vertical, 5)
-                    statRow(label: "Eaten",
-                            value: eaten,
-                            color: Color(hex: "#C4A97D"))
-                    Rectangle()
-                        .fill(Color(UIColor.separator).opacity(0.3))
-                        .frame(height: 0.5)
-                        .padding(.vertical, 5)
-                    statRow(label: isOver ? "Over" : "Left",
-                            value: isOver ? over : left,
-                            color: isOver ? Color(hex: "#FF3B30") : Color(hex: "#30D158"))
-                }
-                .padding(.trailing, 20)
-            }
-            .padding(.vertical, 22)
-
-            // ── Divider ──────────────────────────────────────
-            Rectangle()
-                .fill(Color(UIColor.separator).opacity(0.3))
-                .frame(height: 0.5)
-                .padding(.horizontal, 20)
-
-            // ── Macros ───────────────────────────────────────
-            HStack(spacing: 12) {
-                MacroBar(label: "Protein",
-                         current: protein.current, goal: protein.goal,
-                         color: Color(hex: "#FF6B6B"))
-                MacroBar(label: "Carbs",
-                         current: carbs.current,   goal: carbs.goal,
-                         color: Color(hex: "#FFB347"))
-                MacroBar(label: "Fat",
-                         current: fat.current,     goal: fat.goal,
-                         color: Color(hex: "#4FC3F7"))
+                Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
-            .padding(.bottom, 20)
 
-            // ── Water Intake ───────────────────────────────
-            WaterIntakeRow(current: 48, goal: 96)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+            // Rings + summary
+            HStack(alignment: .center, spacing: 14) {
+                ZStack {
+                    Circle()
+                        .stroke(Color(UIColor.systemGroupedBackground), lineWidth: 8)
+                        .frame(width: 100, height: 100)
+                    Circle()
+                        .trim(from: 0, to: 0.83)
+                        .stroke(gold, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 100, height: 100)
+                    VStack(spacing: 1) {
+                        Text("83%")
+                            .font(.system(size: 18, weight: .heavy))
+                            .foregroundColor(Color(UIColor.label))
+                        Text("of goal")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
 
-            // ── Log Meal ───────────────────────────────────
-            LogMealRow(action: { showingMealSheet = true })
+                Spacer(minLength: 12)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    SummaryLine(title: "GOAL",  value: "2,200 kcal")
+                    SummaryLine(title: "EATEN", value: "1,840 kcal")
+                    SummaryLine(title: "REMAINING", value: "360 kcal", valueColor: Color(hex: "#30D158"))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Divider().padding(.horizontal, 20).padding(.top, 14)
+
+            // Macros
+            VStack(alignment: .leading, spacing: 10) {
+                Text("MACROS")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.0)
+                HStack(spacing: 14) {
+                    MacroBar(title: "PROTEIN", grams: 118, percent: 0.78, color: proteinColor)
+                    MacroBar(title: "CARBS",   grams: 195, percent: 0.88, color: carbsColor)
+                    MacroBar(title: "FAT",     grams: 61,  percent: 0.87, color: fatColor)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Divider().padding(.horizontal, 20).padding(.top, 14)
+
+            // Water
+            WaterRow()
                 .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(.top, 14)
+
+            // CTA
+            Button {
+                // log meal action
+            } label: {
+                Text("Log a Meal →")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(UIColor.label))
+                    .foregroundColor(Color(UIColor.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 18)
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.07), radius: 18, x: 0, y: 6)
-        .shadow(color: .black.opacity(0.03), radius: 2,  x: 0, y: 1)
-        .onAppear {
-            withAnimation(.spring(response: 1.0, dampingFraction: 0.72).delay(0.1)) {
-                ringProgress = min(CGFloat(eaten) / CGFloat(goal), 1.0)
-            }
-        }
-        .sheet(isPresented: $showingMealSheet) {
-            MealLogSheet(mealText: $mealText,
-                         selectedCategory: $selectedCategory,
-                         onSave: {
-                             // TODO: integrate save with model; update ring/macros
-                             showingMealSheet = false
-                             mealText = ""
-                             selectedCategory = MealCategory.suggested()
-                         },
-                         onCancel: {
-                             showingMealSheet = false
-                         })
-        }
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
     }
+}
 
-    // MARK: - Stat Row (right-aligned)
+struct SummaryLine: View {
+    let title: String
+    let value: String
+    var valueColor: Color = Color(UIColor.label)
 
-    private func statRow(label: String, value: Int, color: Color) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            // Color accent bar on the LEFT of each stat
-            RoundedRectangle(cornerRadius: 99)
-                .fill(color)
-                .frame(width: 3, height: 32)
-
-            // Label + value, leading aligned
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text("\(value)")
-                        .font(.system(size: 22, weight: .heavy))
-                        .foregroundColor(Color(UIColor.label))
-                    Text("kcal")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-            }
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+                .tracking(0.8)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .heavy))
+                .foregroundColor(valueColor)
         }
     }
 }
 
-// ============================================================
-// MARK: - Macro Bar
-// ============================================================
+struct MacroRow: View { // kept for API compatibility if referenced elsewhere
+    var body: some View {
+        EmptyView()
+    }
+}
 
-private struct MacroBar: View {
-    let label: String
-    let current: Double
-    let goal: Double
+struct MacroBar: View {
+    let title: String
+    let grams: Int
+    let percent: CGFloat
     let color: Color
 
-    @State private var filled: CGFloat = 0
-    private var pct: CGFloat { min(CGFloat(current / goal), 1.0) }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .lastTextBaseline) {
-                Text(String(format: "%.0fg", current))
-                    .font(.system(size: 13, weight: .bold))
+                Text("\(grams)g")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(UIColor.label))
                 Spacer()
-                Text("\(Int(pct * 100))%")
+                Text("\(Int(percent * 100))%")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(UIColor.secondaryLabel))
+                    .foregroundColor(.secondary)
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(UIColor.systemGroupedBackground))
-                        .frame(height: 5)
-                    Capsule()
-                        .fill(color)
-                        .frame(width: filled * geo.size.width, height: 5)
-                        .animation(
-                            .spring(response: 0.8, dampingFraction: 0.65).delay(0.15),
-                            value: filled
-                        )
+                    Capsule().fill(Color(UIColor.systemGroupedBackground)).frame(height: 4)
+                    Capsule().fill(color)
+                        .frame(width: geo.size.width * percent, height: 4)
                 }
             }
-            .frame(height: 5)
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.6)
-                .foregroundColor(color.opacity(0.8))
+            .frame(height: 4)
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.secondary)
+                .tracking(0.5)
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { filled = pct }
-        }
+        .frame(maxWidth: .infinity)
     }
 }
 
-// ============================================================
-// MARK: - Water Intake Row
-// ============================================================
-
-private struct WaterIntakeRow: View {
-    var current: Double
-    var goal: Double
-
-    @State private var filled: CGFloat = 0
-    private var pct: CGFloat { min(CGFloat(current / goal), 1.0) }
+struct WaterRow: View {
+    private let waterColor = Color(hex: "#4FC3F7")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                // Accent bar to match stat rows
-                RoundedRectangle(cornerRadius: 99)
-                    .fill(Color(hex: "#4FC3F7"))
-                    .frame(width: 3, height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("WATER")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
                         .tracking(0.8)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-
-                    HStack(alignment: .lastTextBaseline, spacing: 6) {
-                        Text(String(format: "%.0foz", current))
-                            .font(.system(size: 18, weight: .heavy))
-                            .foregroundColor(Color(UIColor.label))
-                        Text("of \(Int(goal))oz")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(UIColor.secondaryLabel))
-                        Spacer()
-                        // Quick add button (visual only)
-                        Button {
-                            // Hook up to model later
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .bold))
-                                Text("Add 8oz")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundColor(Color(UIColor.systemBackground))
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 10)
-                            .background(Color(hex: "#4FC3F7"))
-                            .clipShape(Capsule())
-                            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    Text("48oz of 96oz")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Color(UIColor.label))
                 }
+                Spacer()
+                Button {
+                    // add 8 oz
+                } label: {
+                    Text("Add 8oz")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Color(UIColor.systemBackground))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color(UIColor.label))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(UIColor.systemGroupedBackground))
-                        .frame(height: 6)
-                    Capsule()
-                        .fill(Color(hex: "#4FC3F7"))
-                        .frame(width: filled * geo.size.width, height: 6)
-                        .animation(
-                            .spring(response: 0.8, dampingFraction: 0.65).delay(0.1),
-                            value: filled
-                        )
+                    Capsule().fill(Color(UIColor.systemGroupedBackground))
+                    Capsule().fill(waterColor)
+                        .frame(width: geo.size.width * 0.5)
                 }
             }
             .frame(height: 6)
         }
-        .onAppear { filled = pct }
     }
 }
 
-// ============================================================
-// MARK: - Meal Logging
-// ============================================================
-
-private enum MealCategory: String, CaseIterable, Identifiable {
-    case breakfast = "Breakfast"
-    case lunch = "Lunch"
-    case dinner = "Dinner"
-    case snack = "Snack"
-
-    var id: String { rawValue }
-
-    static func suggested(date: Date = Date()) -> MealCategory {
-        let hour = Calendar.current.component(.hour, from: date)
-        switch hour {
-        case 5..<11: return .breakfast
-        case 11..<16: return .lunch
-        case 16..<22: return .dinner
-        default: return .snack
-        }
-    }
-}
-
-private struct LogMealRow: View {
-    var action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Left accent to match sections
-            RoundedRectangle(cornerRadius: 99)
-                .fill(Color(hex: "#C4A97D"))
-                .frame(width: 3, height: 32)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("LOG MEAL")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                Text("Add breakfast, lunch, dinner, or a snack")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(UIColor.tertiaryLabel))
-            }
-            Spacer()
-            Button(action: action) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                    Text("Log Meal")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundColor(Color(UIColor.systemBackground))
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color(hex: "#C4A97D"))
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-}
-
-private struct MealLogSheet: View {
-    @Binding var mealText: String
-    @Binding var selectedCategory: MealCategory
-    var onSave: () -> Void
-    var onCancel: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                // Category selector with sensible default and easy override
-                Picker("Category", selection: $selectedCategory) {
-                    ForEach(MealCategory.allCases) { cat in
-                        Text(cat.rawValue).tag(cat)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                // Text entry for now; future: photo/voice
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("What did you eat?")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                    TextField("e.g. Grilled chicken salad, 450 kcal", text: $mealText)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                // Future extensibility placeholders
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Coming soon")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color(UIColor.tertiaryLabel))
-                    HStack(spacing: 10) {
-                        Label("Photo", systemImage: "camera")
-                            .font(.system(size: 12, weight: .semibold))
-                            .padding(8)
-                            .background(Color(UIColor.systemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        Label("Voice", systemImage: "mic")
-                            .font(.system(size: 12, weight: .semibold))
-                            .padding(8)
-                            .background(Color(UIColor.systemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer()
-            }
-            .padding(16)
-            .navigationTitle("Log Meal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave()
-                    }
-                    .disabled(mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-}
-
-// ============================================================
-// MARK: - Meals List Card
-// ============================================================
-
-private struct MealEntry: Identifiable {
-    let id = UUID()
-    let category: MealCategory
-    let title: String
-    let calories: Int
-}
-
-private struct MealsCard: View {
-    var entries: [MealEntry]
-
-    private var grouped: [(MealCategory, [MealEntry])] {
-        let groups = Dictionary(grouping: entries, by: { $0.category })
-        // Order categories Breakfast, Lunch, Dinner, Snack
-        return MealCategory.allCases.compactMap { cat in
-            if let items = groups[cat], !items.isEmpty { return (cat, items) }
-            return nil
-        }
-    }
+struct RecentMealsCard: View {
+    let groups: [(MealType, [MealEntry])]
+    let onEdit: (MealEntry) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Meals")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Color(UIColor.label))
-                HStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 99)
-                        .fill(Color(hex: "#C4A97D"))
-                        .frame(width: 24, height: 1.5)
-                    Rectangle()
-                        .fill(Color(UIColor.separator).opacity(0.25))
-                        .frame(height: 0.75)
-                        .padding(.leading, 6)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TODAY")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .tracking(0.9)
+                    Text("Recent Meals")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
-                .padding(.top, 10)
+                Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
-            .padding(.bottom, 8)
 
-            ForEach(Array(grouped.enumerated()), id: \.offset) { index, pair in
-                let (category, items) = pair
-                // Section header
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 99)
-                        .fill(Color(UIColor.tertiaryLabel))
-                        .frame(width: 3, height: 20)
-                    Text(category.rawValue.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, index == 0 ? 6 : 14)
-                .padding(.bottom, 6)
+            VStack(spacing: 0) {
+                ForEach(Array(groups.enumerated()), id: \.offset) { gi, group in
+                    let (type, items) = group
+                    // Section header
+                    HStack {
+                        Text(type.rawValue.uppercased())
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(1.0)
+                            .foregroundColor(Color(UIColor.tertiaryLabel))
+                        Spacer()
+                    }
+                    .padding(.top, gi == 0 ? 4 : 12)
+                    .padding(.bottom, 2)
 
-                // Items
-                VStack(spacing: 0) {
-                    ForEach(items) { item in
-                        HStack(alignment: .center, spacing: 12) {
-                            Image(systemName: "fork.knife")
-                                .foregroundColor(Color(hex: "#C4A97D"))
-                                .frame(width: 22)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.title)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(UIColor.label))
-                                Text("\(item.calories) kcal")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(Color(UIColor.secondaryLabel))
-                            }
-                            Spacer()
+                    ForEach(items) { meal in
+                        mealRow(meal: meal)
+                        if meal.id != items.last?.id {
+                            Divider().padding(.leading, 20)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                    }
 
-                        if item.id != items.last?.id {
-                            Rectangle()
-                                .fill(Color(UIColor.separator).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 54)
-                                .padding(.trailing, 20)
-                        }
+                    if gi != groups.count - 1 {
+                        Divider().padding(.horizontal, 0).padding(.top, 10)
                     }
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 14)
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.07), radius: 18, x: 0, y: 6)
-        .shadow(color: .black.opacity(0.03), radius: 2,  x: 0, y: 1)
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+    }
+
+    private func mealRow(meal: MealEntry) -> some View {
+        HStack(spacing: 12) {
+            Text(meal.emoji)
+                .font(.system(size: 17))
+                .frame(width: 36, height: 36)
+                .background(Color(UIColor.systemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(meal.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(UIColor.label))
+                Text("\(meal.kcal) kcal")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button {
+                onEdit(meal)
+            } label: {
+                Text("Edit")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(UIColor.label))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color(UIColor.systemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 10)
     }
 }
 
-// ============================================================
-// MARK: - Nutrition Screen (composed)
-// ============================================================
+// MARK: - Inline Meal Editor (sheet)
+struct MealInlineEditor: View {
+    @State var meal: MealEntry
+    var onSave: (MealEntry) -> Void
 
-public struct NutritionScreen: View {
-    public init() {}
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 16) {
+                    // Emoji & name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("MEAL")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .tracking(0.8)
+                        HStack(spacing: 10) {
+                            TextField("🍽️", text: Binding(
+                                get: { meal.emoji },
+                                set: { meal.emoji = $0 }
+                            ))
+                            .font(.system(size: 28))
+                            .frame(width: 52, height: 52)
+                            .background(Color(UIColor.systemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-    public var body: some View {
-        ZStack {
-            Color(hex: "#F7F5F2").ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Nutrition")
-                            .font(.system(size: 32, weight: .bold, design: .serif))
-                            .foregroundColor(Color(UIColor.label))
-                        Text(Date.now.formatted(date: .abbreviated, time: .omitted).uppercased())
-                            .font(.system(size: 11, weight: .semibold))
-                            .tracking(1.4)
-                            .foregroundColor(Color(UIColor.tertiaryLabel))
-                            .padding(.top, 6)
-                        HStack(spacing: 0) {
-                            RoundedRectangle(cornerRadius: 99)
-                                .fill(Color(hex: "#C4A97D"))
-                                .frame(width: 32, height: 1.5)
-                            Rectangle()
-                                .fill(Color(UIColor.separator).opacity(0.25))
-                                .frame(height: 0.75)
-                                .padding(.leading, 6)
+                            TextField("Meal name", text: Binding(
+                                get: { meal.name },
+                                set: { meal.name = $0 }
+                            ))
+                            .font(.system(size: 17, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .frame(height: 52)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
                         }
-                        .padding(.top, 14)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
 
-                    // Main cards
-                    CalorieRingCard()
-                        .padding(.horizontal, 16)
+                    // Calories
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("CALORIES")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .tracking(0.8)
+                        TextField("kcal", value: Binding(
+                            get: { meal.kcal },
+                            set: { meal.kcal = $0 }
+                        ), formatter: NumberFormatter())
+                        .keyboardType(.numberPad)
+                        .font(.system(size: 17, weight: .semibold))
+                        .padding(14)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+                    }
 
-                    MealsCard(entries: [
-                        // TODO: replace with real data from your model
-                        MealEntry(category: .breakfast, title: "Oatmeal with berries", calories: 320),
-                        MealEntry(category: .lunch, title: "Grilled chicken salad", calories: 450),
-                        MealEntry(category: .snack, title: "Greek yogurt", calories: 150),
-                        MealEntry(category: .dinner, title: "Salmon, rice, broccoli", calories: 620)
-                    ])
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
+                    // Meal type
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("MEAL TYPE")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .tracking(0.8)
+                        Picker("Type", selection: Binding(
+                            get: { meal.type },
+                            set: { meal.type = $0 }
+                        )) {
+                            ForEach(MealType.allCases) { t in
+                                Text(t.rawValue).tag(t)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
 
+                    Spacer(minLength: 10)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
                 .padding(.bottom, 24)
-                
             }
-            .scrollIndicators(.hidden)
+            .background(Color(hex: "#F7F5F2").ignoresSafeArea())
+            .navigationTitle("Edit Meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { onSave(meal) }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(UIColor.label))
+                }
+            }
         }
     }
-    
-    // Compute a safe top padding based on the device’s safe area
-   
 }
-
-// ============================================================
-// MARK: - Preview
-// ============================================================
 
 #Preview {
-    ZStack {
-        Color(hex: "#F7F5F2").ignoresSafeArea()
-
-        VStack(alignment: .leading, spacing: 0) {
-
-            // Header — matches other screens exactly
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Nutrition")
-                    .font(.system(size: 32, weight: .bold, design: .serif))
-                    .foregroundColor(Color(UIColor.label))
-                Text("Tuesday, March 3".uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundColor(Color(UIColor.tertiaryLabel))
-                    .padding(.top, 6)
-                HStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 99)
-                        .fill(Color(hex: "#C4A97D"))
-                        .frame(width: 32, height: 1.5)
-                    Rectangle()
-                        .fill(Color(UIColor.separator).opacity(0.25))
-                        .frame(height: 0.75)
-                        .padding(.leading, 6)
-                }
-                .padding(.top, 14)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
-
-            CalorieRingCard()
-                .padding(.horizontal, 16)
-
-            MealsCard(entries: [
-                MealEntry(category: .breakfast, title: "Oatmeal with berries", calories: 320),
-                MealEntry(category: .lunch, title: "Grilled chicken salad", calories: 450),
-                MealEntry(category: .snack, title: "Greek yogurt", calories: 150),
-                MealEntry(category: .dinner, title: "Salmon, rice, broccoli", calories: 620)
-            ])
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-
-            Spacer()
-        }
-    }
+    NutritionScreen()
 }
 
