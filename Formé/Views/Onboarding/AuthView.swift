@@ -1,18 +1,31 @@
-//  Full-screen auth entry point — Sign in with Apple (primary) + Google (secondary)
+//
 //  AuthView.swift
-//  Formé
+//  Formé
 //
 //  Created by Sean Hughes on 3/5/26.
 //
+//  Full-screen auth entry point.
+//  Sign in with Apple (primary, per Apple HIG) + Sign in with Google.
+//
+//  Security: Apple Sign-In uses a cryptographically random nonce that is
+//  SHA-256 hashed before being sent to Apple. The original nonce is held in
+//  @State and forwarded to Supabase to verify the token server-side, preventing
+//  replay attacks. See Apple's "Preventing replay attacks" documentation.
 
-import Foundation
 import SwiftUI
 import AuthenticationServices
-import GoogleSignIn
+import CryptoKit
+
+// MARK: - AuthView
 
 struct AuthView: View {
+
     @EnvironmentObject var authService: AuthService
     @State private var showError = false
+
+    /// The raw (unhashed) nonce generated just before Apple's authorization request.
+    /// Stored in @State so it's available in the completion handler.
+    @State private var currentNonce: String?
 
     var body: some View {
         ZStack {
@@ -34,7 +47,7 @@ struct AuthView: View {
                     }
 
                     VStack(spacing: 6) {
-                        Text("Formé")                          
+                        Text("Formé")
                             .font(.system(size: 36, weight: .black))
                             .foregroundColor(.white)
                         Text("Train smarter. Eat better. See the connection.")
@@ -50,9 +63,14 @@ struct AuthView: View {
                 // MARK: Auth Buttons
                 VStack(spacing: 12) {
 
-                    // Apple Sign-In (must be first per Apple HIG)
+                    // Apple Sign-In must appear first per Apple HIG
                     SignInWithAppleButton(.signIn) { request in
+                        // 1. Generate a fresh nonce for this request
+                        let nonce = randomNonceString()
+                        currentNonce = nonce
                         request.requestedScopes = [.fullName, .email]
+                        // 2. Send the SHA-256 hash to Apple (not the raw nonce)
+                        request.nonce = sha256(nonce)
                     } onCompletion: { result in
                         handleAppleSignIn(result)
                     }
@@ -71,7 +89,7 @@ struct AuthView: View {
                 }
                 .padding(.horizontal, 24)
 
-                // MARK: Legal footer
+                // MARK: Legal Footer
                 Text("By continuing, you agree to our [Terms of Service](https://yourapp.com/terms) and [Privacy Policy](https://yourapp.com/privacy)")
                     .font(.system(size: 12))
                     .foregroundColor(.appTextSecondary)
@@ -97,53 +115,73 @@ struct AuthView: View {
         switch result {
         case .success(let auth):
             guard
-                let credential = auth.credential as? ASAuthorizationAppleIDCredential,
-                let idTokenData = credential.identityToken,
-                let idToken = String(data: idTokenData, encoding: .utf8)
+                let credential   = auth.credential as? ASAuthorizationAppleIDCredential,
+                let idTokenData  = credential.identityToken,
+                let idToken      = String(data: idTokenData, encoding: .utf8),
+                let nonce        = currentNonce
             else {
                 authService.errorMessage = "Could not retrieve Apple credentials."
                 return
             }
 
-            // ⚠️ Apple only provides name on FIRST sign-in. Save it immediately.
-            let firstName = credential.fullName?.givenName ?? ""
-            let lastName  = credential.fullName?.familyName ?? ""
-            if !firstName.isEmpty {
+            // Apple only provides the full name on the very first sign-in.
+            // Persist it immediately so the onboarding name step can pre-fill it.
+            if let firstName = credential.fullName?.givenName, !firstName.isEmpty {
                 UserDefaults.standard.set(firstName, forKey: "appleFirstName")
-                UserDefaults.standard.set(lastName,  forKey: "appleLastName")
+                UserDefaults.standard.set(credential.fullName?.familyName ?? "", forKey: "appleLastName")
             }
 
             Task {
-                await authService.signInWithAppleNative(
-                    idToken: idToken,
-                    nonce: ""  // Pass a real nonce if you implement nonce verification
-                )
+                await authService.signInWithAppleNative(idToken: idToken, nonce: nonce)
             }
 
         case .failure(let error):
-            // ASAuthorizationError.canceled is not a real error — user tapped cancel
+            // ASAuthorizationError.canceled means the user dismissed the sheet — not an error
             if (error as? ASAuthorizationError)?.code != .canceled {
                 authService.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - Nonce Helpers
+
+    /// Generates a cryptographically random alphanumeric nonce of the given length.
+    private func randomNonceString(length: Int = 32) -> String {
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let result = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        assert(result == errSecSuccess, "SecRandomCopyBytes failed")
+
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+
+    /// Returns the lowercase hex SHA-256 digest of `input`.
+    private func sha256(_ input: String) -> String {
+        let digest = SHA256.hash(data: Data(input.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 
 // MARK: - Google Sign-In Button
 
 struct GoogleSignInButton: View {
+
     @EnvironmentObject var authService: AuthService
 
     var body: some View {
         Button {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let vc    = scene.windows.first?.rootViewController else { return }
+            guard
+                let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                let vc    = scene.windows.first?.rootViewController
+            else { return }
+
             Task {
                 await authService.signInWithGoogle(presenting: vc)
             }
         } label: {
             HStack(spacing: 12) {
-                Image("google_logo")         // Add google_logo.png to your asset catalog
+                // Add google_logo.png (20 × 20 pt) to your asset catalog
+                Image("google_logo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)

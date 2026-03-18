@@ -1,15 +1,23 @@
 //
 //  OnboardingContainerView.swift
-//  Formé
+//  Formé
 //
 //  Created by Sean Hughes on 3/5/26.
-//  Hosts all onboarding steps, progress bar, and back navigation.
-//  Presented as a full-screen cover after auth.
+//
+//  Hosts all onboarding steps with a shared progress bar and back-navigation.
+//  Presented by ContentView when the user is authenticated but hasn't yet
+//  completed onboarding.
+//
+//  Completion flow:
+//  When vm.completeOnboarding() finishes it writes
+//  UserDefaults["hasCompletedOnboarding"] = true. ContentView listens to that
+//  key via @AppStorage and automatically transitions to MainTabView — no
+//  explicit callback needed here.
 
-import Foundation
 import SwiftUI
 
 struct OnboardingContainerView: View {
+
     @StateObject private var vm = OnboardingViewModel()
     @EnvironmentObject var authService: AuthService
 
@@ -33,7 +41,7 @@ struct OnboardingContainerView: View {
                             removal:   .move(edge: .leading).combined(with: .opacity)
                         )
                     )
-                    .id(vm.currentStep)  // forces SwiftUI to re-render on step change
+                    .id(vm.currentStep)   // forces SwiftUI to diff & animate on step change
 
                 Spacer()
 
@@ -41,11 +49,6 @@ struct OnboardingContainerView: View {
                 bottomActions
                     .padding(.horizontal, 24)
                     .padding(.bottom, 32)
-            }
-        }
-        .onChange(of: vm.onboardingComplete) { complete in
-            if complete {
-                // The parent ContentView observes this and switches to main app
             }
         }
     }
@@ -56,11 +59,8 @@ struct OnboardingContainerView: View {
     private var topBar: some View {
         VStack(spacing: 12) {
             HStack {
-                // Back button (hidden on first step)
                 if vm.currentStep != .name {
-                    Button {
-                        vm.goBack()
-                    } label: {
+                    Button { vm.goBack() } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.appTextPrimary)
@@ -75,7 +75,6 @@ struct OnboardingContainerView: View {
 
                 Spacer()
 
-                // Step counter
                 if vm.currentStep != .complete {
                     Text("Step \(vm.currentStep.rawValue + 1) of \(OnboardingStep.allCases.count - 1)")
                         .font(.system(size: 13, weight: .medium))
@@ -83,7 +82,6 @@ struct OnboardingContainerView: View {
                 }
             }
 
-            // Progress bar (hidden on complete screen)
             if vm.currentStep != .complete {
                 OnboardingProgressBar(progress: vm.currentStep.progress)
             }

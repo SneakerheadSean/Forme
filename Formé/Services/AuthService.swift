@@ -1,9 +1,19 @@
 //
 //  AuthService.swift
-//  Formé
-// Handles Sign in with Apple and Sign in with Google,
-// both routing through Supabase Auth.
+//  Formé
+//
 //  Created by Sean Hughes on 3/5/26.
+//
+//  Handles Sign in with Apple (native ASAuthorization flow) and
+//  Sign in with Google, both exchanging tokens with Supabase Auth.
+//
+//  Architecture notes:
+//  - Singleton @MainActor class, observed as an @EnvironmentObject.
+//  - Automatically starts a Supabase auth-state listener on init so
+//    currentUserId stays in sync with session changes (token refresh,
+//    sign-out from another device, etc.).
+//  - The Google Sign-In URL callback is registered in Forme_App.swift
+//    via .onOpenURL { GIDSignIn.sharedInstance.handle(url) }.
 
 import Foundation
 import Combine
@@ -15,32 +25,56 @@ import Supabase
 final class AuthService: NSObject, ObservableObject {
 
     static let shared = AuthService()
-    private let supabase = SupabaseService.shared.client
+
+    // MARK: - Published State
 
     @Published var currentUserId: String?
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
 
+    // MARK: - Private
+
+    private let supabase = SupabaseService.shared.client
+
+    // MARK: - Init
+
     private override init() {
         super.init()
-        Task { await restoreSession() }
+        Task {
+            await restoreSession()
+            await listenToAuthStateChanges()
+        }
     }
 
     // MARK: - Session Restore
 
-    /// Called on app launch — if a valid session exists, skip auth screen
+    /// Called on launch — if a valid Supabase session already exists, populate currentUserId
+    /// so the root router skips AuthView immediately.
     func restoreSession() async {
         do {
             let session = try await supabase.auth.session
             currentUserId = session.user.id.uuidString
         } catch {
+            // No active session — user will see AuthView
             currentUserId = nil
+        }
+    }
+
+    // MARK: - Auth State Listener
+
+    /// Keeps currentUserId in sync with Supabase session changes
+    /// (token refresh, remote sign-out, etc.). Runs for the lifetime of the app.
+    private func listenToAuthStateChanges() async {
+        for await (_, session) in await supabase.auth.authStateChanges {
+            currentUserId = session?.user.id.uuidString
         }
     }
 
     // MARK: - Sign Out
 
     func signOut() async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             try await supabase.auth.signOut()
             currentUserId = nil
@@ -49,35 +83,19 @@ final class AuthService: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Sign in with Apple
+    // MARK: - Sign in with Apple (native flow)
 
-    func signInWithApple() async {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            // Supabase handles the full Apple OAuth flow natively
-            // It opens ASWebAuthenticationSession internally
-            let session = try await supabase.auth.signInWithOAuth(
-                provider: .apple,
-                redirectTo: URL(string: "YOUR_APP_SCHEME://login-callback")
-            )
-            // Note: On success Supabase posts a session — listen via the
-            // auth state change listener below.
-            // The session variable here may be nil on first launch
-            // (handled by authStateChanges listener).
-            _ = session
-        } catch {
-            errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
-            isLoading = false
-        }
-    }
-
-    /// Alternative: Native ASAuthorizationController flow → exchange token with Supabase
-    /// Use this if you want the native Apple sheet instead of a web view.
+    /// Called from AuthView after the native ASAuthorization sheet succeeds.
+    ///
+    /// - Parameters:
+    ///   - idToken:  The raw identity token string from ASAuthorizationAppleIDCredential.
+    ///   - nonce:    The *original* (unhashed) nonce that was SHA-256 hashed and sent to Apple.
+    ///               Supabase verifies this server-side for replay protection.
     func signInWithAppleNative(idToken: String, nonce: String) async {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
+
         do {
             let session = try await supabase.auth.signInWithIdToken(
                 credentials: OpenIDConnectCredentials(
@@ -90,21 +108,22 @@ final class AuthService: NSObject, ObservableObject {
         } catch {
             errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
         }
-        isLoading = false
     }
 
     // MARK: - Sign in with Google
 
-    /// Call this from a View that has access to a UIViewController
+    /// Presents the Google sign-in sheet, then exchanges the resulting ID token with Supabase.
+    ///
+    /// - Parameter viewController: The presenting UIViewController (obtained from the active
+    ///   UIWindowScene in GoogleSignInButton).
     func signInWithGoogle(presenting viewController: UIViewController) async {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
-            // Step 1: Get Google credential
-            let result = try await GIDSignIn.sharedInstance.signIn(
-                withPresenting: viewController
-            )
+            // Step 1: Google native sign-in
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: viewController)
 
             guard let idToken = result.user.idToken?.tokenString else {
                 throw AuthError.missingGoogleToken
@@ -122,19 +141,9 @@ final class AuthService: NSObject, ObservableObject {
             currentUserId = session.user.id.uuidString
 
         } catch {
-            errorMessage = "Google Sign-In failed: \(error.localizedDescription)"
-        }
-        isLoading = false
-    }
-
-    // MARK: - Listen to Auth State Changes
-
-    /// Start this listener in your App entry point or SceneDelegate
-    func startAuthStateListener(onChange: @escaping (String?) -> Void) {
-        Task {
-            for await (_, session) in await supabase.auth.authStateChanges {
-                let userId = session?.user.id.uuidString
-                await MainActor.run { onChange(userId) }
+            // GIDSignInError.canceled (code 0) is not a real error
+            if (error as? GIDSignInError)?.code != .canceled {
+                errorMessage = "Google Sign-In failed: \(error.localizedDescription)"
             }
         }
     }
@@ -146,7 +155,8 @@ final class AuthService: NSObject, ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .missingGoogleToken: return "Could not retrieve Google ID token."
+            case .missingGoogleToken:
+                return "Could not retrieve Google ID token."
             }
         }
     }

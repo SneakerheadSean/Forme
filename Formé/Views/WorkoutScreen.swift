@@ -399,11 +399,13 @@ struct WorkoutScreen: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
 
-                    // Header
+                    Spacer(minLength: 0).frame(height: 0)
+                    
                     workoutHeader
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         .padding(.bottom, 20)
+                        .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0)
 
                     // ── Active plan hero
                     sectionLabel("My Plan")
