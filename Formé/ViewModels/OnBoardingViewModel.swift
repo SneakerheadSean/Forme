@@ -87,6 +87,14 @@ final class OnboardingViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var onboardingComplete: Bool = false
 
+    init() {
+        // Apple only returns name/email on first authorization; prefill if we captured it.
+        let defaults = UserDefaults.standard
+        firstName = defaults.string(forKey: "appleFirstName") ?? ""
+        lastName = defaults.string(forKey: "appleLastName") ?? ""
+        profile.email = defaults.string(forKey: "appleEmail")
+    }
+
     // MARK: - Validation
 
     var canProceedFromCurrentStep: Bool {
