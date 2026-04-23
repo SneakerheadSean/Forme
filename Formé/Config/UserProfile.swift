@@ -67,7 +67,7 @@ enum ActivityLevel: String, CaseIterable, Codable {
     case lightlyActive      = "lightly_active"
     case moderatelyActive   = "moderately_active"
     case veryActive         = "very_active"
-    case extremelyActive    = "extremely_active"
+    case extremelyActive    = "extra_active"
 
     var displayName: String {
         switch self {

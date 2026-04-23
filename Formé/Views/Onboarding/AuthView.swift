@@ -66,7 +66,10 @@ struct AuthView: View {
                     // Apple Sign-In must appear first per Apple HIG
                     SignInWithAppleButton(.signIn) { request in
                         // 1. Generate a fresh nonce for this request
-                        let nonce = randomNonceString()
+                        guard let nonce = randomNonceString() else {
+                            authService.errorMessage = "Unable to start Apple Sign-In. Please try again."
+                            return
+                        }
                         currentNonce = nonce
                         request.requestedScopes = [.fullName, .email]
                         // 2. Send the SHA-256 hash to Apple (not the raw nonce)
@@ -112,6 +115,8 @@ struct AuthView: View {
     // MARK: - Apple Sign-In Handler
 
     private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        defer { currentNonce = nil } // avoid reusing nonce across attempts
+
         switch result {
         case .success(let auth):
             guard
@@ -120,7 +125,7 @@ struct AuthView: View {
                 let idToken      = String(data: idTokenData, encoding: .utf8),
                 let nonce        = currentNonce
             else {
-                authService.errorMessage = "Could not retrieve Apple credentials."
+                authService.errorMessage = "Could not retrieve valid Apple credentials."
                 return
             }
 
@@ -129,6 +134,9 @@ struct AuthView: View {
             if let firstName = credential.fullName?.givenName, !firstName.isEmpty {
                 UserDefaults.standard.set(firstName, forKey: "appleFirstName")
                 UserDefaults.standard.set(credential.fullName?.familyName ?? "", forKey: "appleLastName")
+            }
+            if let email = credential.email, !email.isEmpty {
+                UserDefaults.standard.set(email, forKey: "appleEmail")
             }
 
             Task {
@@ -146,10 +154,12 @@ struct AuthView: View {
     // MARK: - Nonce Helpers
 
     /// Generates a cryptographically random alphanumeric nonce of the given length.
-    private func randomNonceString(length: Int = 32) -> String {
+    private func randomNonceString(length: Int = 32) -> String? {
         var randomBytes = [UInt8](repeating: 0, count: length)
         let result = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
-        assert(result == errSecSuccess, "SecRandomCopyBytes failed")
+        guard result == errSecSuccess else {
+            return nil
+        }
 
         let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
         return String(randomBytes.map { charset[Int($0) % charset.count] })

@@ -78,6 +78,10 @@ final class AuthService: NSObject, ObservableObject {
         do {
             try await supabase.auth.signOut()
             currentUserId = nil
+            let defaults = UserDefaults.standard
+            defaults.removeObject(forKey: "appleFirstName")
+            defaults.removeObject(forKey: "appleLastName")
+            defaults.removeObject(forKey: "appleEmail")
         } catch {
             errorMessage = error.localizedDescription
         }
