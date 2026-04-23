@@ -42,7 +42,7 @@ struct ContentView: View {
         // When the user signs out, clear the onboarding flag so they start fresh on next login.
         .onChange(of: authService.currentUserId) { userId in
             if userId == nil {
-                hasCompletedOnboarding = true
+                hasCompletedOnboarding = false
             }
         }
     }
