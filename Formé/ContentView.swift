@@ -57,6 +57,7 @@ struct MainTabView: View {
     @EnvironmentObject var session: SessionStore
     @EnvironmentObject var nutrition: NutritionStore
     @EnvironmentObject var health: HealthStore
+    @EnvironmentObject var workout: WorkoutStore
 
     var body: some View {
         TabView {
@@ -88,6 +89,7 @@ struct MainTabView: View {
             if let uid = authService.currentUserId {
                 await session.loadProfile(userId: uid)
                 await nutrition.load(userId: uid)
+                await workout.load(userId: uid)
             }
             await health.refresh()
         }

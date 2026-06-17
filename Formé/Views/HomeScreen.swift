@@ -623,6 +623,7 @@ struct HomeScreen: View {
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var nutrition: NutritionStore
     @EnvironmentObject private var health: HealthStore
+    @EnvironmentObject private var workout: WorkoutStore
 
     // Real profile-driven values (with safe fallbacks before the profile loads).
     private var userName: String { session.firstName }
@@ -647,11 +648,17 @@ struct HomeScreen: View {
                 carbs:   MacroData(grams: nutrition.carbsG,   goal: carbsGoal),
                 fat:     MacroData(grams: nutrition.fatG,     goal: fatGoal)
             ),
-            workouts: []                         // real sessions arrive in Phase 3
+            workouts: workout.todaySessions.map {
+                WorkoutEntry(
+                    emoji: WorkoutType.emoji(for: $0.session_type),
+                    name: $0.name,
+                    kcal: $0.calories_burned ?? 0,
+                    colorHex: "#FF6B6B",
+                    bgHex: "#FFF0F0"
+                )
+            }
         )
     }
-
-    private var workoutPlan: WorkoutPlan = DashboardMock.plan
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -670,17 +677,6 @@ struct HomeScreen: View {
 
                 SummaryCard(data: summaryData)
                     .padding(.horizontal, 16)
-
-                // ── Workout plan card ─────────────────────────
-                SectionLabel(title: "Today's Training")
-                    .padding(.horizontal, 20)
-                    .padding(.top, 22)
-                    .padding(.bottom, 10)
-
-                WorkoutPlanCard(plan: workoutPlan, onStart: {
-                    // TODO: push to active workout screen
-                })
-                .padding(.horizontal, 16)
 
                 // Bottom safe-zone padding
                 Spacer().frame(height: 28)
@@ -701,4 +697,5 @@ struct HomeScreen: View {
         .environmentObject(SessionStore())
         .environmentObject(NutritionStore())
         .environmentObject(HealthStore())
+        .environmentObject(WorkoutStore())
 }

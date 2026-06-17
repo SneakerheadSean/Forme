@@ -59,6 +59,25 @@ final class HealthKitManager {
             store.execute(query)
         }
     }
+
+    /// Write a completed workout (with optional energy) to Apple Health.
+    func saveWorkout(activity: HKWorkoutActivityType, start: Date, end: Date, calories: Double) async throws {
+        guard isAvailable else { return }
+        let config = HKWorkoutConfiguration()
+        config.activityType = activity
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
+        try await builder.beginCollection(at: start)
+        if calories > 0, let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
+            let sample = HKQuantitySample(
+                type: energyType,
+                quantity: HKQuantity(unit: .kilocalorie(), doubleValue: calories),
+                start: start, end: end
+            )
+            try await builder.addSamples([sample])
+        }
+        try await builder.endCollection(at: end)
+        _ = try await builder.finishWorkout()
+    }
 }
 
 // MARK: - Observable Store
@@ -95,6 +114,22 @@ final class HealthStore: ObservableObject {
         }
         if let kcal = try? await manager.todayActiveEnergy() {
             burnedToday = Int(kcal.rounded())
+        }
+    }
+
+    /// Persist a completed workout to Health (only if sync is enabled), then refresh burned.
+    func saveWorkout(sessionType: String, start: Date, end: Date, calories: Double) async {
+        guard isEnabled, manager.isAvailable else { return }
+        try? await manager.saveWorkout(activity: Self.activity(for: sessionType), start: start, end: end, calories: calories)
+        await refresh()
+    }
+
+    private static func activity(for sessionType: String) -> HKWorkoutActivityType {
+        switch sessionType {
+        case "cardio":      return .running
+        case "flexibility": return .flexibility
+        case "mixed":       return .mixedCardio
+        default:            return .traditionalStrengthTraining
         }
     }
 }

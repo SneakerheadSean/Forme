@@ -19,6 +19,7 @@ struct FormeApp: App {
     @StateObject private var session = SessionStore()
     @StateObject private var nutrition = NutritionStore()
     @StateObject private var health = HealthStore()
+    @StateObject private var workout = WorkoutStore()
 
     var body: some Scene {
         WindowGroup {
@@ -27,6 +28,7 @@ struct FormeApp: App {
                 .environmentObject(session)
                 .environmentObject(nutrition)
                 .environmentObject(health)
+                .environmentObject(workout)
                 // Required for Google Sign-In to handle the OAuth redirect URL.
                 // Without this, the GIDSignIn flow will hang after the browser closes.
                 .onOpenURL { url in
