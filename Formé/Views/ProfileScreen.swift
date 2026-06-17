@@ -237,6 +237,7 @@ struct ProfileScreen: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var session: SessionStore
+    @EnvironmentObject var health: HealthStore
     @Environment(\.openURL) private var openURL
     @State private var showSignOutConfirmation = false
     @State private var showDeleteConfirmation = false
@@ -304,7 +305,7 @@ struct ProfileScreen: View {
                                         icon: "heart.fill",
                                         iconColor: Palette.burn,
                                         title: "Health App Sync",
-                                        isOn: $vm.healthKitSync
+                                        isOn: $health.isEnabled
                                     )
                                 }
                             }
@@ -471,6 +472,7 @@ struct ProfileScreen: View {
         }
         .onAppear { applyProfile() }
         .onChange(of: session.profile) { applyProfile() }
+        .onChange(of: health.isEnabled) { Task { await syncHealth() } }
     }
 
     private func applyProfile() {
@@ -479,6 +481,11 @@ struct ProfileScreen: View {
 
     private func persistProfile() {
         Task { await vm.persist(into: session) }
+    }
+
+    private func syncHealth() async {
+        if health.isEnabled { await health.requestAndRefresh() }
+        else { health.burnedToday = 0 }
     }
 }
 

@@ -622,6 +622,7 @@ struct WorkoutPlanCard: View {
 struct HomeScreen: View {
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var nutrition: NutritionStore
+    @EnvironmentObject private var health: HealthStore
 
     // Real profile-driven values (with safe fallbacks before the profile loads).
     private var userName: String { session.firstName }
@@ -638,7 +639,7 @@ struct HomeScreen: View {
             date: base.date,
             calories: CalorieData(
                 consumed: nutrition.consumedCalories,
-                burned: 0,                       // real "burned" arrives with HealthKit / workout logging (Phase 3)
+                burned: health.burnedToday,      // active energy from Apple Health (0 until Health sync is enabled)
                 goal: calorieGoal
             ),
             macros: MacrosData(
@@ -699,4 +700,5 @@ struct HomeScreen: View {
     HomeScreen()
         .environmentObject(SessionStore())
         .environmentObject(NutritionStore())
+        .environmentObject(HealthStore())
 }

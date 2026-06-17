@@ -18,5 +18,9 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>167092650554-1i9cpv49u8s3oapd42bj96v92fi8qpig.apps.googleusercontent.com</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Formé reads your active energy from Apple Health to show calories burned alongside what you eat.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Formé saves workouts you complete to Apple Health.</string>
 </dict>
 </plist>
