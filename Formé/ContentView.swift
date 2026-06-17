@@ -24,6 +24,7 @@ import SwiftUI
 struct ContentView: View {
 
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var session: SessionStore
 
     /// Mirrors UserDefaults so the view re-renders the moment onboarding writes this flag.
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -43,6 +44,7 @@ struct ContentView: View {
         .onChange(of: authService.currentUserId) { userId in
             if userId == nil {
                 hasCompletedOnboarding = false
+                session.clear()
             }
         }
     }
@@ -51,6 +53,10 @@ struct ContentView: View {
 // MARK: - Main Tab View
 
 struct MainTabView: View {
+    @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var session: SessionStore
+    @EnvironmentObject var nutrition: NutritionStore
+
     var body: some View {
         TabView {
             HomeScreen()
@@ -75,5 +81,13 @@ struct MainTabView: View {
         }
         // Gold accent matches the premium tone used in HomeScreen / ProfileScreen
         .tint(Color(hex: "C4A97D"))
+        // Load the real profile + goals once the user reaches the main app
+        // (post-onboarding), and whenever the tab view re-appears.
+        .task {
+            if let uid = authService.currentUserId {
+                await session.loadProfile(userId: uid)
+                await nutrition.load(userId: uid)
+            }
+        }
     }
 }

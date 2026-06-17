@@ -16,11 +16,15 @@ import GoogleSignIn
 struct FormeApp: App {
 
     @StateObject private var authService = AuthService.shared
+    @StateObject private var session = SessionStore()
+    @StateObject private var nutrition = NutritionStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(authService)
+                .environmentObject(session)
+                .environmentObject(nutrition)
                 // Required for Google Sign-In to handle the OAuth redirect URL.
                 // Without this, the GIDSignIn flow will hang after the browser closes.
                 .onOpenURL { url in

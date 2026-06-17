@@ -620,11 +620,15 @@ struct WorkoutPlanCard: View {
 // ============================================================
 
 struct HomeScreen: View {
-    @AppStorage("user_name") private var userName: String = "Alex"
-    @AppStorage("calorie_goal") private var calorieGoal: Int = 2200
-    @AppStorage("protein_goal") private var proteinGoal: Int = 150
-    @AppStorage("carbs_goal") private var carbsGoal: Int = 220
-    @AppStorage("fat_goal") private var fatGoal: Int = 70
+    @EnvironmentObject private var session: SessionStore
+    @EnvironmentObject private var nutrition: NutritionStore
+
+    // Real profile-driven values (with safe fallbacks before the profile loads).
+    private var userName: String { session.firstName }
+    private var calorieGoal: Int { session.calorieGoal }
+    private var proteinGoal: Int { session.proteinGoal }
+    private var carbsGoal: Int { session.carbsGoal }
+    private var fatGoal: Int { session.fatGoal }
 
     // Keep using mock intake/burn/grams for now; goals come from AppStorage
     private var summaryData: SummaryData {
@@ -633,25 +637,16 @@ struct HomeScreen: View {
             label: base.label,
             date: base.date,
             calories: CalorieData(
-                consumed: base.calories.consumed,
-                burned: base.calories.burned,
+                consumed: nutrition.consumedCalories,
+                burned: 0,                       // real "burned" arrives with HealthKit / workout logging (Phase 3)
                 goal: calorieGoal
             ),
             macros: MacrosData(
-                protein: MacroData(
-                    grams: base.macros.protein.grams,
-                    goal: proteinGoal
-                ),
-                carbs: MacroData(
-                    grams: base.macros.carbs.grams,
-                    goal: carbsGoal
-                ),
-                fat: MacroData(
-                    grams: base.macros.fat.grams,
-                    goal: fatGoal
-                )
+                protein: MacroData(grams: nutrition.proteinG, goal: proteinGoal),
+                carbs:   MacroData(grams: nutrition.carbsG,   goal: carbsGoal),
+                fat:     MacroData(grams: nutrition.fatG,     goal: fatGoal)
             ),
-            workouts: base.workouts
+            workouts: []                         // real sessions arrive in Phase 3
         )
     }
 
@@ -702,4 +697,6 @@ struct HomeScreen: View {
 
 #Preview {
     HomeScreen()
+        .environmentObject(SessionStore())
+        .environmentObject(NutritionStore())
 }
