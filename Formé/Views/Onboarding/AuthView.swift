@@ -93,7 +93,7 @@ struct AuthView: View {
                 .padding(.horizontal, 24)
 
                 // MARK: Legal Footer
-                Text("By continuing, you agree to our [Terms of Service](https://yourapp.com/terms) and [Privacy Policy](https://yourapp.com/privacy)")
+                Text("By continuing, you agree to our [Terms of Service](\(AppLinks.termsOfService.absoluteString)) and [Privacy Policy](\(AppLinks.privacyPolicy.absoluteString))")
                     .font(.system(size: 12))
                     .foregroundColor(.appTextSecondary)
                     .multilineTextAlignment(.center)

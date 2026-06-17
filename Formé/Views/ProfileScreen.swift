@@ -179,7 +179,9 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
 struct ProfileScreen: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authService: AuthService
+    @Environment(\.openURL) private var openURL
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteConfirmation = false
     @State private var activeSheet: ProfileSheet?
     @State private var scrollOffset: CGFloat = 0
 
@@ -319,9 +321,9 @@ struct ProfileScreen: View {
                                 VStack(spacing: 0) {
                                     AboutRow(title: "Version", detail: "1.0.0 (42)")
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
-                                    AboutRow(title: "Privacy Policy", hasChevron: true) {}
+                                    AboutRow(title: "Privacy Policy", hasChevron: true) { openURL(AppLinks.privacyPolicy) }
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
-                                    AboutRow(title: "Terms of Service", hasChevron: true) {}
+                                    AboutRow(title: "Terms of Service", hasChevron: true) { openURL(AppLinks.termsOfService) }
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
                                     AboutRow(title: "Restore Purchases", hasChevron: true) {}
                                 }
@@ -351,6 +353,31 @@ struct ProfileScreen: View {
                                 Button("Cancel", role: .cancel) {}
                             } message: {
                                 Text("You will need to sign in again to access your account.")
+                            }
+
+                            // ── Delete Account (App Store Guideline 5.1.1(v))
+                            Button {
+                                impact(.heavy)
+                                showDeleteConfirmation = true
+                            } label: {
+                                Text("Delete Account")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Palette.inkTertiary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.plain)
+                            .confirmationDialog(
+                                "Delete Account?",
+                                isPresented: $showDeleteConfirmation,
+                                titleVisibility: .visible
+                            ) {
+                                Button("Delete Account", role: .destructive) {
+                                    Task { await authService.deleteAccount() }
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("This permanently deletes your account and all your data. This cannot be undone.")
                             }
 
                             // Bottom safe area pad - reduced from 40 to 28

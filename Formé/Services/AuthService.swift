@@ -87,6 +87,34 @@ final class AuthService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Delete Account
+
+    /// Permanently deletes the user's account and data via the `delete-account`
+    /// edge function, then clears the local session. Required by App Store
+    /// Review Guideline 5.1.1(v).
+    func deleteAccount() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            // The edge function reads the caller's JWT (sent automatically) and
+            // uses the service-role key to delete their rows + auth user.
+            try await supabase.functions.invoke("delete-account")
+
+            // Server-side deletion succeeded — tear down the local session.
+            try? await supabase.auth.signOut()
+            currentUserId = nil
+            let defaults = UserDefaults.standard
+            defaults.removeObject(forKey: "appleFirstName")
+            defaults.removeObject(forKey: "appleLastName")
+            defaults.removeObject(forKey: "appleEmail")
+            defaults.removeObject(forKey: "hasCompletedOnboarding")
+            defaults.removeObject(forKey: "userId")
+        } catch {
+            errorMessage = "Couldn't delete your account. Please try again or contact support."
+        }
+    }
+
     // MARK: - Sign in with Apple (native flow)
 
     /// Called from AuthView after the native ASAuthorization sheet succeeds.
