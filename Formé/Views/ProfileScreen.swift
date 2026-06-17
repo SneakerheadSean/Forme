@@ -113,6 +113,25 @@ enum ProfileFitnessGoal: String, CaseIterable, Identifiable {
         case .performance: return Palette.recover
         }
     }
+
+    // Bridges to the canonical onboarding FitnessGoal (used for persistence).
+    init(from goal: FitnessGoal) {
+        switch goal {
+        case .weightLoss:  self = .weightLoss
+        case .muscleGain:  self = .muscleGain
+        case .maintenance: self = .maintenance
+        case .performance: self = .performance
+        }
+    }
+
+    var fitnessGoal: FitnessGoal {
+        switch self {
+        case .weightLoss:  return .weightLoss
+        case .muscleGain:  return .muscleGain
+        case .maintenance: return .maintenance
+        case .performance: return .performance
+        }
+    }
 }
 
 // MARK: - View Model
@@ -153,6 +172,44 @@ final class ProfileViewModel: ObservableObject {
             self.feedbackText = ""
         }
     }
+
+    // MARK: - Real profile sync + persistence
+
+    /// Populate editable fields from the loaded Supabase profile.
+    func apply(profile: UserProfile) {
+        name = profile.fullName.isEmpty ? profile.firstName : profile.fullName
+        goals.calorieTarget = Double(profile.dailyCalorieTarget)
+        goals.proteinTarget = Double(profile.proteinTargetG)
+        goals.carbTarget    = Double(profile.carbsTargetG)
+        goals.fatTarget     = Double(profile.fatTargetG)
+        goals.primaryGoal   = ProfileFitnessGoal(from: profile.goal)
+        unitSystem          = profile.weightUnit == .kg ? .metric : .imperial
+    }
+
+    /// Persist edited name / goals / units back to Supabase, then refresh the session.
+    func persist(into session: SessionStore) async {
+        guard var profile = session.profile, let userId = profile.id else { return }
+
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: " ", maxSplits: 1)
+        profile.firstName = parts.indices.contains(0) ? String(parts[0]) : trimmed
+        profile.lastName  = parts.indices.contains(1) ? String(parts[1]) : ""
+
+        profile.goal               = goals.primaryGoal.fitnessGoal
+        profile.dailyCalorieTarget = Int(goals.calorieTarget)
+        profile.proteinTargetG     = Int(goals.proteinTarget)
+        profile.carbsTargetG       = Int(goals.carbTarget)
+        profile.fatTargetG         = Int(goals.fatTarget)
+        profile.weightUnit         = unitSystem == .metric ? .kg : .lbs
+        profile.heightUnit         = unitSystem == .metric ? .cm : .ftIn
+
+        do {
+            try await ProfileService.shared.saveProfile(profile)
+            await session.loadProfile(userId: userId)
+        } catch {
+            // Non-fatal for MVP; UI keeps the edited values until the next refresh.
+        }
+    }
 }
 
 enum FeedbackCategory: String, CaseIterable, Identifiable {
@@ -179,6 +236,7 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
 struct ProfileScreen: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var session: SessionStore
     @Environment(\.openURL) private var openURL
     @State private var showSignOutConfirmation = false
     @State private var showDeleteConfirmation = false
@@ -399,9 +457,9 @@ struct ProfileScreen: View {
         // ── Sheets backgrounds updated to F7F5F2
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
-            case .editGoals:   EditGoalsSheet(goals: $vm.goals)
-            case .editName:    EditNameSheet(name: $vm.name)
-            case .units:       UnitsSheet(selection: $vm.unitSystem)
+            case .editGoals:   EditGoalsSheet(goals: $vm.goals) { persistProfile() }
+            case .editName:    EditNameSheet(name: $vm.name) { persistProfile() }
+            case .units:       UnitsSheet(selection: $vm.unitSystem) { persistProfile() }
             case .appearance:  AppearanceSheet(selection: $vm.darkMode)
             case .notifications: EmptyView()
             case .feedback:    FeedbackSheet(vm: vm)
@@ -411,6 +469,16 @@ struct ProfileScreen: View {
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
             scrollOffset = value
         }
+        .onAppear { applyProfile() }
+        .onChange(of: session.profile) { applyProfile() }
+    }
+
+    private func applyProfile() {
+        if let p = session.profile { vm.apply(profile: p) }
+    }
+
+    private func persistProfile() {
+        Task { await vm.persist(into: session) }
     }
 }
 
@@ -706,6 +774,7 @@ private struct AboutRow: View {
 
 struct EditGoalsSheet: View {
     @Binding var goals: UserGoals
+    var onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -833,6 +902,7 @@ struct EditGoalsSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         impact(.medium)
+                        onSave()
                         dismiss()
                     }
                     .font(.system(size: 15, weight: .semibold))
@@ -914,6 +984,7 @@ private struct MacroSliderRow: View {
 
 struct EditNameSheet: View {
     @Binding var name: String
+    var onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
 
@@ -962,6 +1033,7 @@ struct EditNameSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         impact(.medium)
+                        onSave()
                         dismiss()
                     }
                     .font(.system(size: 15, weight: .semibold))
@@ -980,6 +1052,7 @@ struct EditNameSheet: View {
 
 struct UnitsSheet: View {
     @Binding var selection: ProfileViewModel.UnitSystem
+    var onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1028,7 +1101,7 @@ struct UnitsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { onSave(); dismiss() }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.soleil)
                 }
@@ -1307,5 +1380,7 @@ extension View {
 
 #Preview {
     ProfileScreen()
+        .environmentObject(AuthService.shared)
+        .environmentObject(SessionStore())
 }
 
