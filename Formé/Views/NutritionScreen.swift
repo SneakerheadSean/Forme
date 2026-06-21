@@ -40,6 +40,7 @@ struct NutritionScreen: View {
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var nutrition: NutritionStore
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var subscriptions: SubscriptionStore
 
     @State private var showAdd = false
 
@@ -52,37 +53,28 @@ struct NutritionScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-
-                    sectionLabel("TODAY'S ENERGY")
-                        .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 10)
-
-                    summaryCard
-                        .padding(.horizontal, 16)
-
-                    sectionLabel("RECENT MEALS")
-                        .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 10)
-
-                    if nutrition.entries.isEmpty {
-                        emptyState.padding(.horizontal, 16)
-                    } else {
-                        mealsCard.padding(.horizontal, 16)
-                    }
-
-                    Spacer().frame(height: 28)
+            Group {
+                if subscriptions.isPro {
+                    loggingContent
+                } else {
+                    ProLockedScreen(
+                        icon: "fork.knife",
+                        title: "Meal Logging is Pro",
+                        message: "Track your food, calories, and macros every day with Forme Pro."
+                    )
                 }
-                .frame(maxWidth: .infinity)
             }
             .background(Color(hex: "F7F5F2").ignoresSafeArea())
             .navigationTitle("Nutrition")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(gold)
+                if subscriptions.isPro {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showAdd = true } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(gold)
+                        }
                     }
                 }
             }
@@ -91,12 +83,37 @@ struct NutritionScreen: View {
                     await nutrition.quickAdd(name: name, calories: cals, protein: p, carbs: c, fat: f, mealType: type)
                 }
             }
-            .task {
-                if let uid = authService.currentUserId { await nutrition.load(userId: uid) }
+            .task(id: subscriptions.isPro) {
+                if subscriptions.isPro, let uid = authService.currentUserId { await nutrition.load(userId: uid) }
             }
             .refreshable {
                 if let uid = authService.currentUserId { await nutrition.load(userId: uid) }
             }
+        }
+    }
+
+    private var loggingContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+
+                sectionLabel("TODAY'S ENERGY")
+                    .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 10)
+
+                summaryCard
+                    .padding(.horizontal, 16)
+
+                sectionLabel("RECENT MEALS")
+                    .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 10)
+
+                if nutrition.entries.isEmpty {
+                    emptyState.padding(.horizontal, 16)
+                } else {
+                    mealsCard.padding(.horizontal, 16)
+                }
+
+                Spacer().frame(height: 28)
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 

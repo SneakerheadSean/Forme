@@ -76,6 +76,11 @@ struct MainTabView: View {
                     Label("Nutrition", systemImage: "fork.knife")
                 }
 
+            AnalyticsScreen()
+                .tabItem {
+                    Label("Insights", systemImage: "chart.line.uptrend.xyaxis")
+                }
+
             ProfileScreen()
                 .tabItem {
                     Label("Profile", systemImage: "person.fill")

@@ -238,11 +238,15 @@ struct ProfileScreen: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var session: SessionStore
     @EnvironmentObject var health: HealthStore
+    @EnvironmentObject var subscriptions: SubscriptionStore
     @Environment(\.openURL) private var openURL
     @State private var showSignOutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var activeSheet: ProfileSheet?
     @State private var scrollOffset: CGFloat = 0
+    @State private var showPaywall = false
+    @State private var showRestoreToast = false
+    @State private var restoreMessage = ""
 
     enum ProfileSheet: Identifiable {
         case editGoals, editName, units, appearance, notifications, feedback
@@ -271,6 +275,12 @@ struct ProfileScreen: View {
                             CollapsingProfileHeader(name: vm.name, goal: vm.goals.primaryGoal, progress: progress)
                                 .frame(height: 140)
                                 .padding(.top, 8)
+
+                            // ── Forme Pro status / upsell
+                            ProStatusCard(isPro: subscriptions.isPro) {
+                                impact()
+                                showPaywall = true
+                            }
 
                             // ── Goals Card
                             SectionCard(label: "GOALS") {
@@ -301,12 +311,23 @@ struct ProfileScreen: View {
 
                                     Divider().padding(.leading, 52).foregroundStyle(Color(UIColor.separator).opacity(0.3))
 
-                                    SettingsToggleRow(
-                                        icon: "heart.fill",
-                                        iconColor: Palette.burn,
-                                        title: "Health App Sync",
-                                        isOn: $health.isEnabled
-                                    )
+                                    if subscriptions.isPro {
+                                        SettingsToggleRow(
+                                            icon: "heart.fill",
+                                            iconColor: Palette.burn,
+                                            title: "Health App Sync",
+                                            isOn: $health.isEnabled
+                                        )
+                                    } else {
+                                        LockedFeatureRow(
+                                            icon: "heart.fill",
+                                            iconColor: Palette.burn,
+                                            title: "Health App Sync"
+                                        ) {
+                                            impact()
+                                            showPaywall = true
+                                        }
+                                    }
                                 }
                             }
 
@@ -378,13 +399,15 @@ struct ProfileScreen: View {
                             // ── About & Legal
                             SectionCard(label: "ABOUT") {
                                 VStack(spacing: 0) {
-                                    AboutRow(title: "Version", detail: "1.0.0 (42)")
+                                    AboutRow(title: "Version", detail: Self.appVersion)
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
                                     AboutRow(title: "Privacy Policy", hasChevron: true) { openURL(AppLinks.privacyPolicy) }
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
                                     AboutRow(title: "Terms of Service", hasChevron: true) { openURL(AppLinks.termsOfService) }
                                     Divider().padding(.leading, 16).foregroundStyle(Color(UIColor.separator).opacity(0.3))
-                                    AboutRow(title: "Restore Purchases", hasChevron: true) {}
+                                    AboutRow(title: "Restore Purchases", hasChevron: true) {
+                                        Task { await restorePurchases() }
+                                    }
                                 }
                             }
 
@@ -466,7 +489,9 @@ struct ProfileScreen: View {
             case .feedback:    FeedbackSheet(vm: vm)
             }
         }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
         .toast(isPresented: $vm.showFeedbackSuccess, message: "Feedback sent — thank you! 🙌")
+        .toast(isPresented: $showRestoreToast, message: restoreMessage)
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
             scrollOffset = value
         }
@@ -486,6 +511,23 @@ struct ProfileScreen: View {
     private func syncHealth() async {
         if health.isEnabled { await health.requestAndRefresh() }
         else { health.burnedToday = 0 }
+    }
+
+    private func restorePurchases() async {
+        let wasPro = subscriptions.isPro
+        try? await subscriptions.restore()
+        restoreMessage = subscriptions.isPro
+            ? (wasPro ? "You're all set — Forme Pro is active." : "Forme Pro restored! 🎉")
+            : "No purchases found to restore."
+        showRestoreToast = true
+    }
+
+    /// App version + build, read from the bundle (no more hardcoded string).
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
     }
 }
 
@@ -774,6 +816,114 @@ private struct AboutRow: View {
         }
         .buttonStyle(.plain)
         .disabled(action == nil && !hasChevron)
+    }
+}
+
+// MARK: - Forme Pro Status Card
+
+private struct ProStatusCard: View {
+    let isPro: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        if isPro {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Palette.soleilTint)
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Palette.soleil)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Forme Pro")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                    Text("Active — thanks for your support!")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.inkTertiary)
+                }
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.06), radius: 14, y: 5)
+        } else {
+            Button(action: onTap) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 42, height: 42)
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(Color(hexString: "141410"))
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Unlock Forme Pro")
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundStyle(Color(hexString: "141410"))
+                        Text("Health sync, meal logging & analytics")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(hexString: "141410").opacity(0.7))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color(hexString: "141410").opacity(0.7))
+                }
+                .padding(18)
+                .background(
+                    LinearGradient(colors: [Palette.soleilLight, Palette.soleilDeep],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+                .shadow(color: Palette.soleil.opacity(0.35), radius: 16, y: 8)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Locked Feature Row
+
+private struct LockedFeatureRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(UIColor.systemGroupedBackground))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                }
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Spacer()
+                HStack(spacing: 5) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("PRO")
+                        .font(.system(size: 11, weight: .heavy))
+                        .tracking(0.5)
+                }
+                .foregroundStyle(Color(hexString: "141410"))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Palette.soleil, in: Capsule())
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
     }
 }
 
